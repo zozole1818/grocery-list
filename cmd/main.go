@@ -22,21 +22,27 @@ func main() {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	port := 8080
+	repo := internal.NewRepo()
 
+	port := 8080
 	e := echo.New()
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	//e.Use(middleware.Static("public/static")) // uncomment to serve static files
+	e.Use(middleware.Static("public/static"))
 	//e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 	//	AllowOrigins: []string{"http://localhost:5173"},
 	//	AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
 	//})) // uncomment to define CORS
 
-	h := internal.NewHandler(ctx)
+	h := internal.NewHandler(ctx, repo)
 
 	e.GET("/quotes", h.GetQuote())
+	e.GET("/items", h.GetItems())
+	e.POST("/items", h.AddItem())
+	e.PATCH("/items/:id", h.UpdateItem())
+	e.DELETE("/items/:id", h.DeleteItem())
+	e.GET("/notifications", h.Notifications())
 
 	go func() {
 		if err := e.Start(":" + strconv.Itoa(port)); err != nil && err != http.ErrServerClosed {
