@@ -22,7 +22,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	repo := internal.NewRepo()
+	repo := internal.NewMapRepo()
 
 	port := 8080
 	e := echo.New()
@@ -35,14 +35,19 @@ func main() {
 	//	AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
 	//})) // uncomment to define CORS
 
-	h := internal.NewHandler(ctx, repo)
+	fridge := internal.NewFridge()
+	h := internal.NewHandler(ctx, repo, fridge)
 
 	e.GET("/quotes", h.GetQuote())
 	e.GET("/items", h.GetItems())
 	e.POST("/items", h.AddItem())
-	e.PATCH("/items/:id", h.UpdateItem())
-	e.DELETE("/items/:id", h.DeleteItem())
+	e.PUT("/items", h.UpdateOrCreateItem())
+	e.DELETE("/items/:name", h.DeleteItem())
 	e.GET("/notifications", h.Notifications())
+
+	e.GET("/fridges/:name", h.GetFridgeItems())
+	e.POST("/fridges/:name/fill", h.FillFridge())
+	e.POST("/fridges/:name/empty", h.EmptyFridge())
 
 	go func() {
 		if err := e.Start(":" + strconv.Itoa(port)); err != nil && err != http.ErrServerClosed {
@@ -51,7 +56,22 @@ func main() {
 	}()
 
 	// Wait for context cancellation
-	<-ctx.Done()
+
+	select {
+	case <-ctx.Done():
+		err := fridge.Flush()
+		if err != nil {
+			slog.Error("error when flushing fridge: " + err.Error())
+		}
+		mapRepo := repo.(*internal.MapRepo)
+		err = mapRepo.Flush()
+		if err != nil {
+			slog.Error("error when flushing shopping list: " + err.Error())
+		}
+
+		break
+	}
+	//<-ctx.Done()
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
