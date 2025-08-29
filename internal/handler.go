@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 )
 
 type Handler struct {
@@ -16,6 +17,7 @@ type Handler struct {
 	fridge      *Fridge
 	repo        Repo
 	notificator *Notificator
+	emailer     *Emailer
 }
 
 func NewHandler(ctx context.Context, repo Repo, fridge *Fridge) *Handler {
@@ -24,6 +26,7 @@ func NewHandler(ctx context.Context, repo Repo, fridge *Fridge) *Handler {
 		fridge:      fridge,
 		repo:        repo,
 		notificator: NewNotificator(),
+		emailer:     NewEmailer("smtp.gmail.com", 587, "zuzanna.go.mail@gmail.com"),
 	}
 }
 
@@ -198,7 +201,10 @@ func (h *Handler) FillFridge() echo.HandlerFunc {
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, NewErrorResponse(fmt.Errorf("error when filling a frige: %v", err)))
 		}
-		// todo add deleting shopping list after fill
+		err = h.repo.DeleteAll()
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, NewErrorResponse(fmt.Errorf("error when purging shopping list: %v", err)))
+		}
 		return c.JSON(http.StatusNoContent, nil)
 	}
 }
@@ -206,6 +212,22 @@ func (h *Handler) FillFridge() echo.HandlerFunc {
 func (h *Handler) EmptyFridge() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		_ = h.fridge.Empty()
+		return c.JSON(http.StatusNoContent, nil)
+	}
+}
+
+func (h *Handler) SendEmails() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		toAddresses := strings.Split(c.QueryParam("to"), ",")
+		items, err := h.repo.FindAll()
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, NewErrorResponse(fmt.Errorf("error when retrieving shopping list: %v", err)))
+		}
+		//emailAddr := "zuzanna.go.mail@gmail.com"
+		err = h.emailer.Send(toAddresses, items)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, NewErrorResponse(fmt.Errorf("error when sending email: %v", err)))
+		}
 		return c.JSON(http.StatusNoContent, nil)
 	}
 }

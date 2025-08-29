@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/zozole1818/grocery-list/internal"
+	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -17,6 +20,12 @@ import (
 func main() {
 
 	slog.SetLogLoggerLevel(slog.LevelDebug)
+
+	err := loadEnvs(".env")
+	if err != nil {
+		slog.Error("Error when loading env file", "error", err)
+		return
+	}
 
 	ctx := context.Background()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -48,6 +57,8 @@ func main() {
 	e.GET("/fridges/:name", h.GetFridgeItems())
 	e.POST("/fridges/:name/fill", h.FillFridge())
 	e.POST("/fridges/:name/empty", h.EmptyFridge())
+
+	e.POST("/emails", h.SendEmails())
 
 	go func() {
 		if err := e.Start(":" + strconv.Itoa(port)); err != nil && err != http.ErrServerClosed {
@@ -83,4 +94,27 @@ func main() {
 
 	<-shutdownCtx.Done()
 	slog.Info("Server shutdown complete.")
+}
+
+func loadEnvs(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("error when reading %s file: %v", path, err)
+	}
+	result := make(map[string]string)
+	err = yaml.Unmarshal(b, &result)
+	if err != nil {
+		return fmt.Errorf("error when Unmarshal %s file: %v", path, err)
+	}
+	var errors []string
+	for k, v := range result {
+		err = os.Setenv(k, v)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error when setting %s env var: %v", k, err).Error())
+		}
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("errors when setting env vars: %s", strings.Join(errors, ", "))
+	}
+	return nil
 }

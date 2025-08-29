@@ -15,6 +15,7 @@ type Repo interface {
 	Add(item Item) (Item, error)
 	UpdateOrCreate(item Item) (Item, error)
 	Delete(name string) error
+	DeleteAll() error
 }
 
 type MapRepo struct {
@@ -98,6 +99,13 @@ func (r *MapRepo) Delete(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.shoppingList, name)
+	return nil
+}
+
+func (r *MapRepo) DeleteAll() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.shoppingList = map[string]Item{}
 	return nil
 }
 

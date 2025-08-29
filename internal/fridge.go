@@ -46,7 +46,7 @@ func NewFridge() *Fridge {
 		return emptyFridge
 	}
 	fs := FridgeStorage{}
-	err = json.Unmarshal(b, &fs)
+	err = json.Unmarshal(b, &fs.storage)
 	if err != nil {
 		slog.Debug("Error when Unmarshal shopping list file. Will start with empty list.", "error", err)
 		return emptyFridge
@@ -119,7 +119,8 @@ func (f *Fridge) Flush() error {
 			"items": f.items,
 		},
 	}
-	b, err := json.Marshal(&fs)
+	slog.Debug("Flushing fridge", "fridge", fs)
+	b, err := json.Marshal(fs.storage)
 	if err != nil {
 		return fmt.Errorf("error when marshaling fridge items: %v", err)
 	}
